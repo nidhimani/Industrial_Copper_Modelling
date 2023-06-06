@@ -50,17 +50,18 @@ def Preprocessing(df):
         for i in cols:
             if i in cont_cols:
                     print(i, df[i].apply(lambda x : isinstance(x, float) or isinstance(x, int)).all())
-        
+        # df["selling_price"].skew() # skewness is 301.38642903793095
         y = df["selling_price"]
-        y[y <= 0] = 1e-8
+        y[y <= 0] = 1e-8   # (1 multiplied by 10 raised to the power of -8) This is done to avoid taking the logarithm of zero or negative values
         y = np.log(np.array(y))
         y[y == np.inf] = np.nan
         y[y == -np.inf] = np.nan
         si = SimpleImputer(strategy = 'mean')
         y = si.fit_transform(np.array(y).reshape(-1,1))
 
-        #df["selling_price"].skew()
-        # winsorizing to reduce skewness
+        #df["selling_price"].skew()  # skewness is -7.780198090218454
+        #df[['quantity tons','width', 'selling_price']].plot.box(figsize = (10,5))
+        # winsorizing to treat outliers
         df["quantity tons"] = winsorize(df["quantity tons"], limits = [0.1, 0.1])
         df["thickness"] = winsorize(df["thickness"], limits = [0.1, 0.1])
         for col in ['quantity tons', 'width', 'selling_price']:
