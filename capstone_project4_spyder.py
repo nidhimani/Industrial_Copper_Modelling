@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import streamlit as st
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import r2_score
 from sklearn.metrics import accuracy_score
@@ -22,20 +23,20 @@ df = pd.read_csv("C:\\Users\\manideep\\Downloads\\daily_offers.xlsx - Result 1.c
 #df.columns
 #df.head()
 #df.describe()
-
-def Preprocessing(df):
+def Preprocessing(df):  
+        # id column is unique and not useful to our analysis
+        df.drop(columns = ["id"], axis = 1, inplace = True)
         #cleaning the columns material_ref and quantity tons
         a = df["material_ref"].str.startswith("0000000000")
         b = (a==True)
         df["material_ref"][b] = np.NAN
         df["quantity tons"].values[173086] = 0
         df["quantity tons"] = pd.to_numeric(df["quantity tons"])
-        df.drop(columns = ["id"], axis = 1, inplace = True)
         
         cols = ['quantity tons', 'customer', 'country', 'application', 'thickness', 'width', 'selling_price'  ,'status', 'item type', 'material_ref', 'product_ref']
         cont_cols = ['quantity tons', 'customer', 'country', 'application', 'thickness', 'width', 'selling_price']
         cat_cols = [ 'status', 'item type', 'material_ref', 'product_ref']
-        
+    
         # Treating null values
         for i in cols:
              if i == 'thickness':
@@ -47,34 +48,35 @@ def Preprocessing(df):
              else:
                   si = SimpleImputer(strategy = 'mean')
                   df[i] = si.fit_transform(np.array(df[i]).reshape(-1,1))
+        df = df.dropna()
         for i in cols:
             if i in cont_cols:
                     print(i, df[i].apply(lambda x : isinstance(x, float) or isinstance(x, int)).all())
-        # df["selling_price"].skew() # skewness is 301.38642903793095
+        
         y = df["selling_price"]
-        y[y <= 0] = 1e-8   # (1 multiplied by 10 raised to the power of -8) This is done to avoid taking the logarithm of zero or negative values
+        y[y <= 0] = 1e-8
         y = np.log(np.array(y))
         y[y == np.inf] = np.nan
         y[y == -np.inf] = np.nan
         si = SimpleImputer(strategy = 'mean')
         y = si.fit_transform(np.array(y).reshape(-1,1))
 
-        #df["selling_price"].skew()  # skewness is -7.780198090218454
-        #df[['quantity tons','width', 'selling_price']].plot.box(figsize = (10,5))
-        # winsorizing to treat outliers
+        #df["selling_price"].skew()
+        # winsorizing to reduce skewness
         df["quantity tons"] = winsorize(df["quantity tons"], limits = [0.1, 0.1])
         df["thickness"] = winsorize(df["thickness"], limits = [0.1, 0.1])
         for col in ['quantity tons', 'width', 'selling_price']:
             df[col] = winsorize(df[col], limits=[0.1, 0.1])
         #df[['quantity tons','width', 'selling_price']].plot.box(figsize = (10,5))
-
+        #st.write(len(df)) # 181674
         # creating a new feature delivery time and deleting the features item date and delivery date
         df['item_date'] = pd.to_datetime(df['item_date'].astype(str).str.rstrip('.0'), format='%Y%m%d', errors='coerce')
-        #df1.dropna(subset=['item_date'], inplace=True)
         df['delivery date'] = pd.to_datetime(df['delivery date'].astype(str).str.rstrip('.0'), format='%Y%m%d', errors='coerce')
         df.dropna(subset=['item_date','delivery date'], inplace=True)
         df['Delivery_Time'] = (df['delivery date'] - df['item_date']).dt.total_seconds()
         df = df.drop(columns = ["item_date", "delivery date"], axis = 1)
+        #st.write(len(df)) # 181667
+
         # EDA
 # =============================================================================
 #         sns.heatmap(df.corr()).plot()
@@ -88,8 +90,6 @@ def Preprocessing(df):
         copy = df
         return(df)
 def Regression(df1, new):
-        #print(df, new)
-        df1 = df1.dropna()
         #encoding the categorical features of the dataset df1
         target_en = ce.TargetEncoder(cols = [ 'status', 'item type', 'material_ref', 'product_ref'])
         b = df1["selling_price"]
@@ -168,33 +168,32 @@ def Classification(copy, new1):
         c = rf.predict(np.array(new1[:]))
         return(c)
 # building streamlit application
-import streamlit as st
 st.title("Industrial Copper Modeling")  # Setting the title of the page
 st.header("Regression")
 columns = ['item_date', 'quantity tons', 'customer', 'country', 'status', 'item type', 'application', 'thickness', 'width', 'material_ref', 'product_ref', 'delivery date']
 for column in columns:
-    df.loc[181673, column] = st.text_input(column)
+    df.loc[len(df), column] = st.text_input(column)
+
 submitted1 = st.button("Submit1")
 if submitted1:
       df = Preprocessing(df)
-      df1 = df.iloc[:181667, :]
-      new = df.iloc[181667:181668,:]
+      df1 = df.iloc[:(len(df)-1), :]
+      new = df.iloc[(len(df)-1):(len(df)),:]
       c = Regression(df1, new )  
       st.write("Predicted selling price is ", c)
-                     #  st.write("working")
 st.header("Classification")
 columns1 = ['item_date', 'quantity tons', 'customer', 'country', 'item type', 'application', 'thickness', 'width', 'material_ref', 'product_ref', 'delivery date', 'selling_price']
 # Assuming you have a DataFrame called df
-df.drop(index=181673, inplace=True)
+df.drop(index=181667, inplace=True)
 for i in columns1:
-    df.loc[181673, i] = st.text_input(i + " " + "input")
+    df.loc[len(df), i] = st.text_input(i + " " + "input")
 submitted2 = st.button("Submit2")
 if submitted2:
       df = Preprocessing(df)
-      copy= df.iloc[:181667, :]
-      new1 = df.iloc[181667:181668,:]
+      copy= df.iloc[:(len(df)-1), :]
+      new1 = df.iloc[(len(df)-1):(len(df)),:]
       c = Classification(copy, new1 )  
-      if c == 1:
-          st.write("Won")
-      else:
-          st.write("Lost")
+      if c == 0:
+          st.write('The status is : "Lost"')
+      elif c == 1:
+          st.write('The status is : "Won"')
