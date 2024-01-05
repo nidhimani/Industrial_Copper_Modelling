@@ -13,16 +13,18 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import warnings
 warnings.filterwarnings('ignore')
-# =============================================================================
-# import matplotlib.pyplot as plt
-# import seaborn as sns
-# import catboostimport sweetviz
-# import xgboost
+import matplotlib.pyplot as plt
+import seaborn as sns
+import catboostimport sweetviz
+import xgboost
 # =============================================================================
 df = pd.read_csv("C:\\Users\\manideep\\Downloads\\daily_offers.xlsx - Result 1.csv")  # Reading the data from csv file
 #df.columns
 #df.head()
 #df.describe()
+
+# =========================================================  Preprocessing  ===================================================
+
 def Preprocessing(df):  
         # id column is unique and not useful to our analysis
         df.drop(columns = ["id"], axis = 1, inplace = True)
@@ -52,7 +54,8 @@ def Preprocessing(df):
         for i in cols:
             if i in cont_cols:
                     print(i, df[i].apply(lambda x : isinstance(x, float) or isinstance(x, int)).all())
-        
+                    
+        # logarithmic transformation is used to reduce skewness
         y = df["selling_price"]
         y[y <= 0] = 1e-8
         y = np.log(np.array(y))
@@ -60,22 +63,22 @@ def Preprocessing(df):
         y[y == -np.inf] = np.nan
         si = SimpleImputer(strategy = 'mean')
         y = si.fit_transform(np.array(y).reshape(-1,1))
-
         #df["selling_price"].skew()
-        # winsorizing to reduce skewness
+        
+        # winsorization is used to treat outliers
         df["quantity tons"] = winsorize(df["quantity tons"], limits = [0.1, 0.1])
         df["thickness"] = winsorize(df["thickness"], limits = [0.1, 0.1])
         for col in ['quantity tons', 'width', 'selling_price']:
             df[col] = winsorize(df[col], limits=[0.1, 0.1])
+                
         #df[['quantity tons','width', 'selling_price']].plot.box(figsize = (10,5))
-        #st.write(len(df)) # 181674
+        
         # creating a new feature delivery time and deleting the features item date and delivery date
         df['item_date'] = pd.to_datetime(df['item_date'].astype(str).str.rstrip('.0'), format='%Y%m%d', errors='coerce')
         df['delivery date'] = pd.to_datetime(df['delivery date'].astype(str).str.rstrip('.0'), format='%Y%m%d', errors='coerce')
         df.dropna(subset=['item_date','delivery date'], inplace=True)
         df['Delivery_Time'] = (df['delivery date'] - df['item_date']).dt.total_seconds()
         df = df.drop(columns = ["item_date", "delivery date"], axis = 1)
-        #st.write(len(df)) # 181667
 
         # EDA
 # =============================================================================
@@ -89,6 +92,8 @@ def Preprocessing(df):
         # Taking a copy of the dataframe
         copy = df
         return(df)
+# =========================================================  Regression  ===================================================
+
 def Regression(df1, new):
         #encoding the categorical features of the dataset df1
         target_en = ce.TargetEncoder(cols = [ 'status', 'item type', 'material_ref', 'product_ref'])
@@ -115,6 +120,7 @@ def Regression(df1, new):
                 new = scaler.transform(new)
         else:
                 st.write("You have given invalid values. Please check again!!")
+                
         # building machine learning models using algorithms
         from sklearn.ensemble import RandomForestRegressor 
         rf = RandomForestRegressor()
@@ -124,7 +130,8 @@ def Regression(df1, new):
         return(c)
 #from collections import Counter
 #Counter(copy["status"])
-     
+# =========================================================  Classification  ===================================================
+
 def Classification(copy, new1):  
         new1 = new1.drop(columns = ["status"], axis = 1)
         # setting the status to either won or lost
@@ -167,6 +174,9 @@ def Classification(copy, new1):
         #print("acc of te : ", accuracy_score(te_preds, y_test))
         c = rf.predict(np.array(new1[:]))
         return(c)
+# =========================================================  Streamlit Application  ===================================================
+
+
 # building streamlit application
 st.title("Industrial Copper Modeling")  # Setting the title of the page
 st.header("Regression")
